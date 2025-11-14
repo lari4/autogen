@@ -619,3 +619,123 @@ Does the following text contain any information or advice that might be useful l
 {text}
 ```
 
+---
+
+## Agent Role Prompts
+
+These prompts define the system messages and descriptions for specialized agent roles.
+
+### Assistant Agent
+
+**Location:** `python/packages/autogen-agentchat/src/autogen_agentchat/agents/_assistant_agent.py`
+
+#### DEFAULT_SYSTEM_MESSAGE
+
+**Purpose:** Default system message for the general-purpose assistant agent. Emphasizes tool use and explicit termination signaling.
+
+**Usage:** Used when no custom system message is provided to AssistantAgent.
+
+```python
+system_message = "You are a helpful AI assistant. Solve tasks using your tools. Reply with TERMINATE when the task has been completed."
+```
+
+### File Surfer Agent
+
+**Location:** `python/packages/autogen-ext/src/autogen_ext/agents/file_surfer/_file_surfer.py`
+
+#### DEFAULT_DESCRIPTION
+
+**Purpose:** Brief description of the file surfer agent's purpose.
+
+**Usage:** Used for team composition and agent selection.
+
+```python
+DEFAULT_DESCRIPTION = "An agent that can handle local files."
+```
+
+#### DEFAULT_SYSTEM_MESSAGES
+
+**Purpose:** System message for the file surfer agent that enables it to navigate and read local files using available tools.
+
+**Usage:** Set as the system message for FileSurfer agents.
+
+```python
+DEFAULT_SYSTEM_MESSAGES = [
+    SystemMessage(
+        content="""
+    You are a helpful AI Assistant.
+    When given a user query, use available functions to help the user with their request."""
+    ),
+]
+```
+
+### Video Surfer Agent
+
+**Location:** `python/packages/autogen-ext/src/autogen_ext/agents/video_surfer/_video_surfer.py`
+
+#### DEFAULT_DESCRIPTION
+
+**Purpose:** Brief description of the video surfer agent's capabilities.
+
+**Usage:** Used for team composition and agent selection.
+
+```python
+DEFAULT_DESCRIPTION = "An agent that can answer questions about a local video."
+```
+
+#### DEFAULT_SYSTEM_MESSAGE
+
+**Purpose:** System message that provides a structured approach to video analysis. Defines a clear workflow:
+1. Check video availability
+2. Use transcription to locate relevant parts
+3. Optionally examine screenshots
+4. Provide detailed answers
+
+**Usage:** Set as the system message for VideoSurfer agents.
+
+```python
+DEFAULT_SYSTEM_MESSAGE = """
+You are a helpful agent that is an expert at answering questions from a video.
+When asked to answer a question about a video, you should:
+1. Check if that video is available locally.
+2. Use the transcription to find which part of the video the question is referring to.
+3. Optionally use screenshots from those timestamps
+4. Provide a detailed answer to the question.
+Reply with TERMINATE when the task has been completed.
+"""
+```
+
+### Society of Mind Agent
+
+**Location:** `python/packages/autogen-agentchat/src/autogen_agentchat/agents/_society_of_mind_agent.py`
+
+#### DEFAULT_DESCRIPTION
+
+**Purpose:** Brief description of the Society of Mind agent pattern.
+
+**Usage:** Used for team composition and agent selection.
+
+```python
+DEFAULT_DESCRIPTION = "An agent that uses an inner team of agents to generate responses."
+```
+
+#### DEFAULT_INSTRUCTION
+
+**Purpose:** Instruction prepended to inner team messages when generating the final response. Sets context that the team has already worked on the request.
+
+**Usage:** Used when the Society of Mind agent synthesizes the inner team's work into a response.
+
+```python
+DEFAULT_INSTRUCTION = "Earlier you were asked to fulfill a request. You and your team worked diligently to address that request. Here is a transcript of that conversation:"
+```
+
+#### DEFAULT_RESPONSE_PROMPT
+
+**Purpose:** Prompt that instructs the model to generate a clean, standalone response without revealing the internal team discussion.
+
+**Usage:** Appended after the inner team's conversation to request the final answer.
+
+```python
+DEFAULT_RESPONSE_PROMPT = "Output a standalone response to the original request, without mentioning any of the intermediate discussion."
+```
+
