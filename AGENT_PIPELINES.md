@@ -592,3 +592,396 @@ This document describes the various agent workflow schemes and pipelines in the 
 
 **Implementation:** `_prompter.py`, memory storage system
 
+---
+
+## Web Surfer Interaction Pipeline
+
+**Purpose:** Enables AI agents to interact with web pages through a combination of visual understanding (screenshots with bounding boxes) or text-based navigation, with tools for clicking, scrolling, and information extraction.
+
+**Location:** `python/packages/autogen-ext/src/autogen_ext/agents/web_surfer/`
+
+### Pipeline Flow
+
+```
+                    ┌────────────────────────────┐
+                    │  Navigation Request        │
+                    │  (e.g., "Find info about X │
+                    │   on wikipedia.org")       │
+                    └──────────┬─────────────────┘
+                               │
+                               ▼
+              ┌────────────────────────────────────┐
+              │  Page State Extraction             │
+              │  - Current URL, title              │
+              │  - Viewport content                │
+              │  - Interactive elements            │
+              │    (links, buttons, inputs)        │
+              │  - Screenshot (if multimodal)      │
+              └──────────┬─────────────────────────┘
+                         │
+                         ▼
+              ┌──────────────────────────────────────┐
+              │  Mode Selection                      │
+              └──┬──────────────────────┬────────────┘
+                 │                      │
+          Multimodal Mode         Text-Only Mode
+                 │                      │
+                 ▼                      ▼
+    ┌────────────────────────┐   ┌─────────────────┐
+    │  TOOL_PROMPT_MM        │   │ TOOL_PROMPT_TEXT│
+    │                        │   │                 │
+    │  Includes:             │   │  Includes:      │
+    │  - Screenshot with     │   │  - Text         │
+    │    bounding boxes      │   │    description  │
+    │  - Numeric IDs for     │   │  - List of      │
+    │    elements            │   │    interactive  │
+    │  - Visual context      │   │    elements     │
+    └────────┬───────────────┘   └────────┬────────┘
+             │                            │
+             └──────────┬─────────────────┘
+                        │
+                        ▼
+             ┌──────────────────────────────┐
+             │  DECISION POINT              │
+             │  Prompt asks: Can request be │
+             │  addressed by...             │
+             │  - Current viewport?         │
+             │  - Elsewhere on page?        │
+             │  - Another website?          │
+             │                              │
+             │  Available tools presented   │
+             └──────────┬───────────────────┘
+                        │
+                        ▼
+       ┌────────────────┴────────────────┐
+       │                                 │
+       ▼                                 ▼
+   ┌────────────┐               ┌──────────────────┐
+   │ Viewport   │               │ Page/Site Action │
+   │ Action     │               │                  │
+   └──┬─────────┘               └──┬───────────────┘
+      │                            │
+      ▼                            ▼
+┌──────────────┐          ┌─────────────────────┐
+│ - Click      │          │ - Scroll (up/down)  │
+│ - Input text │          │ - Search page (^F)  │
+│ - Hover      │          │ - Summarize page    │
+└──────┬───────┘          │ - Q&A about page    │
+       │                  │ - Navigate to URL   │
+       │                  │ - Web search        │
+       │                  └──────┬──────────────┘
+       │                         │
+       └──────────┬──────────────┘
+                  │
+                  ▼
+       ┌──────────────────────────┐
+       │  Execute Tool            │
+       │  (Browser interaction)   │
+       └──────────┬───────────────┘
+                  │
+                  ▼
+       ┌──────────────────────────────┐
+       │  Special Case: Q&A Pipeline  │
+       │  (if summarization requested)│
+       │                              │
+       │  Prompt: WEB_SURFER_QA       │
+       │  System: "You can summarize  │
+       │          long documents"     │
+       │  Input: Full page text +     │
+       │         screenshot +         │
+       │         question             │
+       │  Output: 1-2 paragraph       │
+       │          summary             │
+       └──────────┬───────────────────┘
+                  │
+                  ▼
+       ┌──────────────────────────┐
+       │  Tool Result Returned    │
+       │  - New page state        │
+       │  - Extracted info        │
+       │  - Confirmation          │
+       └──────────┬───────────────┘
+                  │
+                  ▼
+       ┌──────────────────────────┐
+       │  Loop back to State      │
+       │  Extraction (if needed)  │
+       └──────────────────────────┘
+```
+
+### Data Flow
+
+1. **Input:** Navigation/information request
+2. **State Capture:**
+   - Browser state → {URL, title, viewport, interactive elements}
+   - Screenshot captured (multimodal mode)
+   - Elements tagged with bounding boxes and IDs
+3. **Prompt Construction:**
+   - Multimodal: {state + screenshot + elements + tools} → TOOL_PROMPT_MM
+   - Text: {state + element list + tools} → TOOL_PROMPT_TEXT
+4. **Decision:** LLM chooses appropriate tool based on context
+5. **Action Execution:** Tool called → Browser state changes
+6. **Special: Summarization:**
+   - If Q&A tool selected:
+   - {full page text + screenshot + question} → QA_PROMPT → Summary
+7. **Loop:** New state → Continue until information found or task complete
+
+### Key Characteristics
+
+- **Multimodal:** Visual understanding via bounding boxes (when available)
+- **Graceful degradation:** Falls back to text mode
+- **Context-aware routing:** Chooses between viewport, page, and web actions
+- **Information extraction:** Q&A subsystem for long documents
+- **Interactive:** Can fill forms, click links, navigate
+
+### Tool Categories
+
+| Category | Tools | Use Case |
+|----------|-------|----------|
+| Viewport | Click, Input, Hover | Interacting with visible elements |
+| Page | Scroll, Find (^F), Q&A | Navigating and extracting from current page |
+| Web | Navigate URL, Web Search | Moving to different pages/sites |
+
+**Implementation:** `_web_surfer.py`, `_prompts.py`
+
+---
+
+## .NET Development Team Pipeline
+
+**Purpose:** Automated software development pipeline with role-based agents (PM, Dev Lead, Developer) that plan, implement, and document applications. Demonstrates hierarchical task decomposition and meta-prompting.
+
+**Location:** `dotnet/samples/dev-team/DevTeam.Backend/Agents/`
+
+### Pipeline Flow
+
+```
+                    ┌─────────────────────────────┐
+                    │  User: "Build app X"        │
+                    └──────────┬──────────────────┘
+                               │
+                               ▼
+              ┌────────────────────────────────────┐
+              │  PRODUCT MANAGER PHASE             │
+              │                                    │
+              │  Step 1: Bootstrap                 │
+              │  Prompt: BootstrapProject          │
+              │  Input: App description + WAF      │
+              │  Output: Bash script to create     │
+              │          project structure         │
+              │                                    │
+              │  [Execute script → Project created]│
+              └──────────┬─────────────────────────┘
+                         │
+                         ▼
+              ┌──────────────────────────────────────┐
+              │  DEV LEAD PHASE: Planning            │
+              │                                      │
+              │  Prompt: Plan                        │
+              │  Input: App description + WAF        │
+              │  Process:                            │
+              │    - Make architecture choices       │
+              │    - Break down into steps/modules   │
+              │    - For each step: create subtasks  │
+              │    - For each subtask: generate      │
+              │      LLM prompt for implementation   │
+              │                                      │
+              │  Output: JSON structure              │
+              │  {                                   │
+              │    steps: [                          │
+              │      {                               │
+              │        step: "1",                    │
+              │        description: "...",           │
+              │        subtasks: [                   │
+              │          {                           │
+              │            subtask: "1.1",           │
+              │            description: "...",       │
+              │            prompt: "Write code to..."│
+              │          }                           │
+              │        ]                             │
+              │      }                               │
+              │    ]                                 │
+              │  }                                   │
+              └──────────┬───────────────────────────┘
+                         │
+                         ▼
+              ┌──────────────────────────────────────┐
+              │  IMPLEMENTATION LOOP                 │
+              │  For each subtask:                   │
+              └──────────┬───────────────────────────┘
+                         │
+                         ▼
+              ┌──────────────────────────────────────┐
+              │  DEVELOPER PHASE: Implement          │
+              │                                      │
+              │  Prompt: Implement (or Improve)      │
+              │  Input: Subtask prompt from plan +   │
+              │         WAF                          │
+              │  Guidelines:                         │
+              │  - Output code in bash script        │
+              │  - Make specific choices             │
+              │  - Use code comments                 │
+              │  - No IDE commands                   │
+              │                                      │
+              │  Output: Bash script that creates    │
+              │          code files                  │
+              └──────────┬───────────────────────────┘
+                         │
+                         ▼
+              ┌──────────────────────────────────────┐
+              │  Execute Script                      │
+              │  (Code files created)                │
+              └──────────┬───────────────────────────┘
+                         │
+                         ▼
+              ┌──────────────────────────────────────┐
+              │  Build & Test (Optional)             │
+              │  If errors occur:                    │
+              │    Loop back to Developer with       │
+              │    Improve prompt + error messages   │
+              └──────────┬───────────────────────────┘
+                         │
+                         ▼
+              ┌──────────────────────────────────────┐
+              │  Next Subtask?                       │
+              └──┬──────────────────┬────────────────┘
+                 │                  │
+              Yes: Loop          No: Continue
+                 │                  │
+                 └──────┐           │
+                        │           ▼
+                        │  ┌────────────────────────┐
+                        │  │ CODE UNDERSTANDING     │
+                        │  │ (Optional Phase)       │
+                        │  │                        │
+                        │  │ For each code file:    │
+                        │  │ Prompt: Explain        │
+                        │  │ Input: Code file       │
+                        │  │ Output: Bullet points  │
+                        │  │         + keywords     │
+                        │  │                        │
+                        │  │ Consolidate:           │
+                        │  │ Prompt: Consolidate    │
+                        │  │        Understanding   │
+                        │  │ Input: Current + New   │
+                        │  │ Output: Updated        │
+                        │  │         understanding  │
+                        │  └────────┬───────────────┘
+                        │           │
+                        └───────────┘
+                                    │
+                                    ▼
+                         ┌──────────────────────────┐
+                         │  PRODUCT MANAGER:        │
+                         │  Documentation           │
+                         │                          │
+                         │  Prompt: Readme          │
+                         │  Input: App description  │
+                         │         + context        │
+                         │  Output: README.md       │
+                         │          (features,      │
+                         │           architecture,  │
+                         │           usage)         │
+                         └──────────┬───────────────┘
+                                    │
+                                    ▼
+                         ┌──────────────────────────┐
+                         │  Complete Application    │
+                         │  - All code files        │
+                         │  - README.md             │
+                         │  - Built (if requested)  │
+                         └──────────────────────────┘
+```
+
+### Data Flow
+
+1. **Input:** Application requirements
+2. **Bootstrap:**
+   - Requirements → PM/BootstrapProject → Bash script → Execute → Project structure
+3. **Planning (Meta-prompting):**
+   - Requirements → DevLead/Plan → JSON with:
+     - Steps, subtasks, **LLM prompts for each subtask**
+4. **Implementation Loop:**
+   - For each subtask:
+     - Subtask prompt (from plan) → Developer/Implement → Bash script → Execute → Code
+     - If errors: Code + errors → Developer/Improve → Fixed code
+5. **Understanding (Optional):**
+   - For each file: Code → Developer/Explain → Insights
+   - All insights → Developer/Consolidate → Full codebase understanding
+6. **Documentation:**
+   - App info + context → PM/Readme → README.md
+7. **Output:** Complete application with documentation
+
+### Key Characteristics
+
+- **Meta-prompting:** Dev Lead generates prompts for Developer
+- **Role separation:** PM (structure), Lead (planning), Dev (implementation)
+- **Iterative debugging:** Improve prompt for fixing errors
+- **Code understanding:** Build knowledge graph of codebase
+- **Structured output:** JSON for machine-readable plans
+- **Bash-based execution:** All code wrapped in executable scripts
+
+### Prompt Chain Example
+
+```
+User: "Build a web app"
+  ↓
+PM: BootstrapProject → "Create a web app scaffold"
+  ↓ (generates project structure)
+DevLead: Plan → JSON with subtask prompts
+  {
+    subtask: "Create API endpoints",
+    prompt: "Write code for REST API with /users endpoint..."
+  }
+  ↓
+Developer: Implement (using prompt from plan)
+  → Bash script creating api.cs
+  ↓
+Developer: Explain (for understanding)
+  → "Keywords: REST, HTTP, CRUD"
+  ↓
+PM: Readme → README.md with features
+```
+
+### Meta-Prompting Pattern
+
+The Dev Lead doesn't just plan—it generates prompts for the Developer:
+1. **DevLead receives:** "Build feature X"
+2. **DevLead generates:** "Write code that does Y with constraints Z"
+3. **Developer receives:** That generated prompt
+4. **Developer outputs:** Code
+
+This creates a two-level prompt hierarchy.
+
+**Implementation:** `DeveloperPrompts.cs`, `DeveloperLeadPrompts.cs`, `PMPrompts.cs`
+
+---
+
+## Summary
+
+These pipelines demonstrate various orchestration patterns:
+
+1. **MagenticOne**: Adaptive multi-agent coordination with self-monitoring
+2. **Society of Mind**: Hierarchical encapsulation with synthesis
+3. **Selector Group Chat**: Dynamic LLM-based routing
+4. **Task-Centric Memory**: Learning from failures with retrieval
+5. **Web Surfer**: Tool-based interaction with multimodal understanding
+6. **.NET Dev Team**: Meta-prompting with role-based specialization
+
+### Common Patterns
+
+- **Multi-stage prompting**: Breaking complex tasks into sequential steps
+- **JSON for structure**: Machine-readable outputs for complex decisions
+- **Validation loops**: Retry logic for robustness
+- **Context building**: Accumulating information across steps
+- **Role specialization**: Different prompts for different agent types
+- **Synthesis**: Combining multiple outputs into coherent responses
+
+### Prompt Chaining Techniques
+
+1. **Sequential**: Output of Prompt A → Input of Prompt B
+2. **Parallel**: Multiple prompts on same input, results combined
+3. **Conditional**: Branch based on output (MagenticOne progress evaluation)
+4. **Iterative**: Repeat with refinement (improve code, update facts)
+5. **Meta**: Generate prompts for other agents (Dev Lead)
+6. **Hierarchical**: Inner/outer teams (Society of Mind)
+
