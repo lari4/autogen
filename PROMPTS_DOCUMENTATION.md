@@ -235,3 +235,118 @@ The answer should be phrased as if you were speaking to the user.
 """
 ```
 
+---
+
+## Web Surfing Prompts
+
+These prompts enable AI agents to navigate and interact with web pages, both in multimodal (with screenshots) and text-only modes.
+
+**Location:** `python/packages/autogen-ext/src/autogen_ext/agents/web_surfer/_prompts.py`
+
+### WEB_SURFER_TOOL_PROMPT_MM
+
+**Purpose:** Multimodal web surfing prompt that enables the AI to interact with webpages using visual information. The prompt describes interactive elements with bounding boxes and numeric IDs overlaid on screenshots, allowing the agent to understand the page layout visually and select appropriate actions.
+
+**Usage:** Used when the web surfer agent operates in multimodal mode with screenshot capabilities.
+
+**Variables:**
+- `{state_description}`: Current state of the browser/page
+- `{visible_targets}`: List of visible interactive elements with their bounding box IDs
+- `{other_targets_str}`: Additional targets not currently visible
+- `{focused_hint}`: Information about the currently focused element
+- `{tool_names}`: Available tools for interaction
+- `{title}`: Current page title
+- `{url}`: Current page URL
+
+```python
+WEB_SURFER_TOOL_PROMPT_MM = """
+{state_description}
+
+Consider the following screenshot of the page. In this screenshot, interactive elements are outlined in bounding boxes of different colors. Each bounding box has a numeric ID label in the same color. Additional information about each visible label is listed below:
+
+{visible_targets}{other_targets_str}{focused_hint}
+
+You are to respond to my next request by selecting an appropriate tool from the following set, or by answering the question directly if possible:
+
+{tool_names}
+
+When deciding between tools, consider if the request can be best addressed by:
+    - the contents of the CURRENT VIEWPORT (in which case actions like clicking links, clicking buttons, inputting text, or hovering over an element, might be more appropriate)
+    - contents found elsewhere on the CURRENT WEBPAGE [{title}]({url}), in which case actions like scrolling, summarization, or full-page Q&A might be most appropriate
+    - on ANOTHER WEBSITE entirely (in which case actions like performing a new web search might be the best option)
+
+My request follows:
+"""
+```
+
+### WEB_SURFER_TOOL_PROMPT_TEXT
+
+**Purpose:** Text-only version of the web surfing prompt for environments without multimodal capabilities. Instead of visual bounding boxes, it relies on textual descriptions of interactive components.
+
+**Usage:** Used when the web surfer agent operates in text-only mode without screenshot capabilities.
+
+**Variables:**
+- `{state_description}`: Current state of the browser/page
+- `{visible_targets}`: List of visible interactive elements
+- `{other_targets_str}`: Additional targets not currently visible
+- `{focused_hint}`: Information about the currently focused element
+- `{tool_names}`: Available tools for interaction
+- `{title}`: Current page title
+- `{url}`: Current page URL
+
+```python
+WEB_SURFER_TOOL_PROMPT_TEXT = """
+{state_description}
+
+You have also identified the following interactive components:
+
+{visible_targets}{other_targets_str}{focused_hint}
+
+You are to respond to my next request by selecting an appropriate tool from the following set, or by answering the question directly if possible:
+
+{tool_names}
+
+When deciding between tools, consider if the request can be best addressed by:
+    - the contents of the CURRENT VIEWPORT (in which case actions like clicking links, clicking buttons, inputting text, or hovering over an element, might be more appropriate)
+    - contents found elsewhere on the CURRENT WEBPAGE [{title}]({url}), in which case actions like scrolling, summarization, or full-page Q&A might be most appropriate
+    - on ANOTHER WEBSITE entirely (in which case actions like performing a new web search might be the best option)
+
+My request follows:
+"""
+```
+
+### WEB_SURFER_QA_SYSTEM_MESSAGE
+
+**Purpose:** System message for the document summarization capability of the web surfer. Sets the agent's role as a helpful assistant specialized in summarizing long documents.
+
+**Usage:** Used as the system message when the web surfer needs to summarize webpage content.
+
+```python
+WEB_SURFER_QA_SYSTEM_MESSAGE = """
+You are a helpful assistant that can summarize long documents to answer question.
+"""
+```
+
+### WEB_SURFER_QA_PROMPT
+
+**Purpose:** Generates prompts for summarizing webpage content, either with respect to a specific question or as a general summary. This function dynamically creates the appropriate prompt based on whether a question is provided.
+
+**Usage:** Called when the web surfer needs to summarize a webpage's full-text content.
+
+**Parameters:**
+- `title` (str): The webpage title
+- `question` (str | None): Optional specific question to guide the summary
+
+**Returns:** Formatted prompt string
+
+```python
+def WEB_SURFER_QA_PROMPT(title: str, question: str | None = None) -> str:
+    base_prompt = f"We are visiting the webpage '{title}'. Its full-text content are pasted below, along with a screenshot of the page's current viewport."
+    if question is not None:
+        return (
+            f"{base_prompt} Please summarize the webpage into one or two paragraphs with respect to '{question}':\n\n"
+        )
+    else:
+        return f"{base_prompt} Please summarize the webpage into one or two paragraphs:\n\n"
+```
+
