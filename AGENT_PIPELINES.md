@@ -152,3 +152,118 @@ This document describes the various agent workflow schemes and pipelines in the 
 
 **Implementation:** `_magentic_one_orchestrator.py`
 
+---
+
+## Society of Mind Pipeline
+
+**Purpose:** Hierarchical agent pattern where an outer agent uses an inner team of agents to generate responses, then synthesizes their work into a clean output. Useful for complex multi-step reasoning that should appear as a single response.
+
+**Location:** `python/packages/autogen-agentchat/src/autogen_agentchat/agents/_society_of_mind_agent.py`
+
+### Pipeline Flow
+
+```
+                    ┌────────────────────────────┐
+                    │  User Message Received     │
+                    │  (to Society of Mind Agent)│
+                    └──────────────┬─────────────┘
+                                   │
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │  Pass Message to Inner Team  │
+                    │  (Inner team operates        │
+                    │   independently with its     │
+                    │   own orchestration)         │
+                    └──────────────┬───────────────┘
+                                   │
+                                   ▼
+              ┌────────────────────────────────────────┐
+              │  INNER TEAM EXECUTION                  │
+              │  (Could be RoundRobin, Selector,       │
+              │   MagenticOne, etc.)                   │
+              │                                        │
+              │  Multiple agents collaborate until     │
+              │  termination condition is met          │
+              └──────────────┬─────────────────────────┘
+                             │
+                             ▼
+              ┌──────────────────────────────────────┐
+              │  Inner Team Completes                │
+              │  Collected: Full conversation        │
+              │            transcript from inner     │
+              │            team                      │
+              └──────────────┬───────────────────────┘
+                             │
+                             ▼
+              ┌──────────────────────────────────────┐
+              │  SYNTHESIS PHASE                     │
+              │  Prompt Construction:                │
+              │                                      │
+              │  1. System: INSTRUCTION              │
+              │     "Earlier you were asked to       │
+              │      fulfill a request. You and      │
+              │      your team worked diligently..." │
+              │                                      │
+              │  2. Conversation transcript from     │
+              │     inner team                       │
+              │                                      │
+              │  3. System: RESPONSE_PROMPT          │
+              │     "Output a standalone response    │
+              │      without mentioning the          │
+              │      intermediate discussion"        │
+              └──────────────┬───────────────────────┘
+                             │
+                             ▼
+              ┌──────────────────────────────────────┐
+              │  LLM Call with Model Client          │
+              │  Input: [Instruction + Transcript +  │
+              │          Response Prompt]            │
+              │  Output: Clean, synthesized response │
+              └──────────────┬───────────────────────┘
+                             │
+                             ▼
+              ┌──────────────────────────────────────┐
+              │  Reset Inner Team                    │
+              │  (Prepares for next invocation)      │
+              └──────────────┬───────────────────────┘
+                             │
+                             ▼
+              ┌──────────────────────────────────────┐
+              │  Return Response to Outer Context    │
+              │  (User sees only final answer,       │
+              │   not inner deliberation)            │
+              └──────────────────────────────────────┘
+```
+
+### Data Flow
+
+1. **Input:** User message/task
+2. **Inner Team Execution:**
+   - Message → Inner Team (operates until termination)
+   - Generates: Complete conversation history
+3. **Synthesis:**
+   - Context construction:
+     - INSTRUCTION prompt (sets context)
+     - Full inner team transcript
+     - RESPONSE_PROMPT (requests clean output)
+   - LLM processes: [Context] → Clean response
+4. **Cleanup:**
+   - Inner team reset (via `team.reset()`)
+5. **Output:** Standalone response (no mention of internal process)
+
+### Key Characteristics
+
+- **Encapsulation:** Hides internal deliberation from outer context
+- **Reusable:** Inner team resets after each use
+- **Flexible:** Works with any team type as inner team
+- **Clean Output:** Synthesizes complex discussions into simple answers
+- **Stateless:** Each invocation starts fresh
+
+### Example Use Cases
+
+- **Multi-expert consultation:** Inner team has writer + editor, outer agent presents final draft
+- **Chain-of-thought hiding:** Inner team reasons step-by-step, outer agent presents conclusion
+- **Parallel exploration:** Inner team explores multiple approaches, outer agent picks best
+
+**Implementation:** `_society_of_mind_agent.py`
+
