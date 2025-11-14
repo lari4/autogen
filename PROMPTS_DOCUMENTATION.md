@@ -402,3 +402,220 @@ If the result indicates there is an error, fix the error and output the code aga
 When you find an answer, verify the answer carefully. Include verifiable evidence in your response if possible."""
 ```
 
+---
+
+## Memory and Learning Prompts
+
+These prompts enable agents to learn from failures, extract insights, and build task-centric memory for improved performance over time.
+
+**Location:** `python/packages/autogen-ext/src/autogen_ext/experimental/task_centric_memory/_prompter.py`
+
+### default_system_message_content
+
+**Purpose:** Default system message for the memory prompter when no specific system message is provided.
+
+**Usage:** Fallback system message for memory-related operations.
+
+```python
+default_system_message_content = "You are a helpful assistant."
+```
+
+### learn_from_failure()
+
+**Purpose:** Multi-step prompting process that analyzes task failures to extract learning insights. This is a sophisticated teaching system that:
+1. Reviews the incorrect work and identifies what went right and wrong
+2. Identifies the underlying misconception that led to the error
+3. Formulates concise, actionable advice to prevent similar mistakes
+
+**Usage:** Called when an agent fails a task to extract lessons for future improvement.
+
+**Parameters:**
+- `task_description`: The original task
+- `memory_section`: Relevant memory context
+- `final_response`: The incorrect answer given
+- `expected_answer`: The correct answer
+- `work_history`: Complete transcript of work done
+
+**System Message:**
+```python
+sys_message = """- You are a patient and thorough teacher.
+- Your job is to review work done by students and help them learn how to do better."""
+```
+
+**Prompt Sequence:**
+
+**Step 1 - Review the work:**
+```text
+# A team of students made a mistake on the following task:
+{task_description}
+
+{memory_section}
+
+# Here's the expected answer, which would have been correct:
+{expected_answer}
+
+# Here is the students' answer, which was INCORRECT:
+{final_response}
+
+# Please review the students' work which follows:
+**-----  START OF STUDENTS' WORK  -----**
+
+{work_history}
+
+**-----  END OF STUDENTS' WORK  -----**
+
+# Now carefully review the students' work above, explaining in detail what the students did right and what they did wrong.
+```
+
+**Step 2 - Identify misconception:**
+```text
+Now put yourself in the mind of the students. What misconception led them to their incorrect answer?
+```
+
+**Step 3 - Formulate concise advice:**
+```text
+Please express your key insights in the form of short, general advice that will be given to the students. Just one or two sentences, or they won't bother to read it.
+```
+
+### find_index_topics()
+
+**Purpose:** Extracts task-completion topics from text to build a semantic index. This helps categorize and retrieve relevant memories based on topic similarity.
+
+**Usage:** Called to index insights and task descriptions for efficient retrieval.
+
+**Parameters:**
+- `input_string`: Text to analyze for topics
+
+**System Message:**
+```python
+sys_message = """You are an expert at semantic analysis."""
+```
+
+**User Prompt:**
+```text
+- My job is to create a thorough index for a book called Task Completion, and I need your help.
+- Every paragraph in the book needs to be indexed by all the topics related to various kinds of tasks and strategies for completing them.
+- Your job is to read the text below and extract the task-completion topics that are covered.
+- The number of topics depends on the length and content of the text. But you should list at least one topic, and potentially many more.
+- Each topic you list should be a meaningful phrase composed of a few words. Don't use whole sentences as topics.
+- Don't include details that are unrelated to the general nature of the task, or a potential strategy for completing tasks.
+- List each topic on a separate line, without any extra text like numbering, or bullets, or any other formatting, because we don't want those things in the index of the book.
+
+# Text to be indexed
+{input_string}
+```
+
+### generalize_task()
+
+**Purpose:** Rephrases task descriptions in more general terms to enable better matching with relevant memories. Uses a multi-step refinement process to extract only essential elements.
+
+**Usage:** Called to create generalized versions of tasks for memory matching.
+
+**Parameters:**
+- `task_description`: Original task description
+- `revise`: Whether to perform revision steps (default: True)
+
+**System Message:**
+```python
+sys_message = """You are a helpful and thoughtful assistant."""
+```
+
+**Prompt Sequence:**
+
+**Step 1 - Extract important points:**
+```text
+We have been given a task description. Our job is not to complete the task, but merely rephrase the task in simpler, more general terms, if possible. Please reach through the following task description, then explain your understanding of the task in detail, as a single, flat list of all the important points.
+
+# Task description
+{task_description}
+```
+
+**Step 2 - Identify irrelevant points (if revise=True):**
+```text
+Do you see any parts of this list that are irrelevant to actually solving the task? If so, explain which items are irrelevant.
+```
+
+**Step 3 - Create final generalized list (if revise=True):**
+```text
+Revise your original list to include only the most general terms, those that are critical to solving the task, removing any themes or descriptions that are not essential to the solution. Your final list may be shorter, but do not leave out any part of the task that is needed for solving the task. Do not add any additional commentary either before or after the list.
+```
+
+### validate_insight()
+
+**Purpose:** Judges whether a given insight would be useful for solving a specific task. Returns a boolean decision.
+
+**Usage:** Called to filter relevant insights before presenting them to agents.
+
+**Parameters:**
+- `insight`: The insight to validate
+- `task_description`: The task to validate against
+
+**System Message:**
+```python
+sys_message = """You are a helpful and thoughtful assistant."""
+```
+
+**User Prompt:**
+```text
+We have been given a potential insight that may or may not be useful for solving a given task.
+- First review the following task.
+- Then review the insight that follows, and consider whether it might help solve the given task.
+- Do not attempt to actually solve the task.
+- Reply with a single character, '1' if the insight may be useful, or '0' if it is not.
+
+# Task description
+{task_description}
+
+# Possibly useful insight
+{insight}
+```
+
+### extract_task()
+
+**Purpose:** Identifies whether text contains a question or task, and extracts it if found. Helps distinguish between informational text and actionable tasks.
+
+**Usage:** Called to parse incoming messages for tasks.
+
+**Parameters:**
+- `text`: Text to analyze
+
+**System Message:**
+```python
+sys_message = """You are a helpful and thoughtful assistant."""
+```
+
+**User Prompt:**
+```text
+Does the following text contain a question or a some task we are being asked to perform?
+- If so, please reply with the full question or task description, along with any supporting information, but without adding extra commentary or formatting.
+- If the task is just to remember something, that doesn't count as a task, so don't include it.
+- If there is no question or task in the text, simply write "None" with no punctuation.
+
+# Text to analyze
+{text}
+```
+
+### extract_advice()
+
+**Purpose:** Extracts potentially useful information or advice from text for storage in memory.
+
+**Usage:** Called to identify valuable information worth remembering.
+
+**Parameters:**
+- `text`: Text to analyze
+
+**System Message:**
+```python
+sys_message = """You are a helpful and thoughtful assistant."""
+```
+
+**User Prompt:**
+```text
+Does the following text contain any information or advice that might be useful later?
+- If so, please copy the information or advice, adding no extra commentary or formatting.
+- If there is no potentially useful information or advice at all, simply write "None" with no punctuation.
+
+# Text to analyze
+{text}
+```
+
