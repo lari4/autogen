@@ -739,3 +739,273 @@ DEFAULT_INSTRUCTION = "Earlier you were asked to fulfill a request. You and your
 DEFAULT_RESPONSE_PROMPT = "Output a standalone response to the original request, without mentioning any of the intermediate discussion."
 ```
 
+---
+
+## Development Team Prompts (.NET Sample)
+
+These prompts are from the .NET dev-team sample application, demonstrating role-specific prompts for software development teams.
+
+**Location:** `dotnet/samples/dev-team/DevTeam.Backend/Agents/`
+
+### Developer Agent
+
+**Location:** `dotnet/samples/dev-team/DevTeam.Backend/Agents/Developer/DeveloperPrompts.cs`
+
+#### Implement
+
+**Purpose:** Code generation prompt for developers. Emphasizes:
+- Outputting working code wrapped in a bash script
+- Making specific implementation choices (no options)
+- Using code comments for intent
+- No IDE commands or execution
+
+**Usage:** Called when a developer needs to implement a feature or component.
+
+**Variables:**
+- `{{$input}}`: Task description or requirements
+- `{{$waf}}`: Well-Architected Framework considerations
+
+```csharp
+Implement = """
+You are a Developer for an application.
+Please output the code required to accomplish the task assigned to you below and wrap it in a bash script that creates the files.
+Do not use any IDE commands and do not build and run the code.
+Make specific choices about implementation. Do not offer a range of options.
+Use comments in the code to describe the intent. Do not include other text other than code and code comments.
+Input: {{$input}}
+{{$waf}}
+""";
+```
+
+#### Improve
+
+**Purpose:** Code improvement and debugging prompt. Used to fix errors or improve existing code.
+
+**Usage:** Called when code needs to be debugged or improved based on error messages or feedback.
+
+**Variables:**
+- `{{$input}}`: Current code and/or error messages
+- `{{$waf}}`: Well-Architected Framework considerations
+
+```csharp
+Improve = """
+You are a Developer for an application. Your job is to imrove the code that you are given in the input below.
+Please output a new version of code that fixes any problems with this version.
+If there is an error message in the input you should fix that error in the code.
+Wrap the code output up in a bash script that creates the necessary files by overwriting any previous files.
+Do not use any IDE commands and do not build and run the code.
+Make specific choices about implementation. Do not offer a range of options.
+Use comments in the code to describe the intent. Do not include other text other than code and code comments.
+Input: {{$input}}
+{{$waf}}
+""";
+```
+
+#### Explain
+
+**Purpose:** Code analysis prompt for building understanding of a codebase. Extracts key features, capabilities, and keywords.
+
+**Usage:** Called when the agent needs to understand existing code files.
+
+**Variables:**
+- `{{$input}}`: Code to analyze
+
+```csharp
+Explain = """
+You are an experienced software developer, with strong experience in Azure and Microsoft technologies.
+Extract the key features and capabilities of the code file below, with the intent to build an understanding of an entire code repository.
+You can include references or documentation links in your explanation. Also where appropriate please output a list of keywords to describe the code or its capabilities.
+Example:
+    Keywords: Azure, networking, security, authentication
+
+===code===
+ {{$input}}
+===end-code===
+Only include the points in a bullet point format and DON'T add anything outside of the bulleted list.
+Be short and concise.
+If the code's purpose is not clear output an error:
+Error: The model could not determine the purpose of the code.
+""";
+```
+
+#### ConsolidateUnderstanding
+
+**Purpose:** Merges new code understanding with existing knowledge. Maintains a growing understanding of the codebase as more files are analyzed.
+
+**Usage:** Called to update the codebase understanding as new files are analyzed.
+
+**Variables:**
+- `{{$input}}`: Current understanding
+- `{{$newUnderstanding}}`: New information to integrate
+
+```csharp
+ConsolidateUnderstanding = """
+You are an experienced software developer, with strong experience in Azure and Microsoft technologies.
+You are trying to build an understanding of the codebase from code files. This is the current understanding of the project:
+===current-understanding===
+ {{$input}}
+===end-current-understanding===
+and this is the new information that surfaced
+===new-understanding===
+ {{$newUnderstanding}}
+===end-new-understanding===
+Your job is to update your current understanding with the new information.
+Only include the points in a bullet point format and DON'T add anything outside of the bulleted list.
+Be short and concise.
+""";
+```
+
+### Developer Lead Agent
+
+**Location:** `dotnet/samples/dev-team/DevTeam.Backend/Agents/DeveloperLead/DeveloperLeadPrompts.cs`
+
+#### Plan
+
+**Purpose:** High-level planning prompt that breaks down an application into steps, modules, and subtasks. Generates a structured JSON plan with:
+- Steps and descriptions
+- Subtasks for each step
+- LLM prompts to accomplish each subtask
+
+This is a sophisticated meta-prompting system where the DevLead generates prompts for other agents.
+
+**Usage:** Called when starting a new project to create a comprehensive implementation plan.
+
+**Variables:**
+- `{{$input}}`: Application description
+- `{{$waf}}`: Well-Architected Framework considerations
+
+**Output Format:** JSON array with steps, subtasks, and prompts
+
+```csharp
+Plan = """
+You are a Dev Lead for an application team, building the application described below.
+Please break down the steps and modules required to develop the complete application, describe each step in detail.
+Make prescriptive architecture, language, and framework choices, do not provide a range of choices.
+For each step or module then break down the steps or subtasks required to complete that step or module.
+For each subtask write an LLM prompt that would be used to tell a model to write the code that will accomplish that subtask.  If the subtask involves taking action/running commands tell the model to write the script that will run those commands.
+In each LLM prompt restrict the model from outputting other text that is not in the form of code or code comments.
+Please output a JSON array data structure, in the precise schema shown below, with a list of steps and a description of each step, and the steps or subtasks that each requires, and the LLM prompts for each subtask.
+Example:
+    {
+        "steps": [
+            {
+                "step": "1",
+                "description": "This is the first step",
+                "subtasks": [
+                    {
+                    "subtask": "Subtask 1",
+                        "description": "This is the first subtask",
+                        "prompt": "Write the code to do the first subtask"
+                    },
+                    {
+                        "subtask": "Subtask 2",
+                        "description": "This is the second subtask",
+                        "prompt": "Write the code to do the second subtask"
+                    }
+                ]
+            }
+        ]
+    }
+Do not output any other text.
+Do not wrap the JSON in any other text, output the JSON format described above, making sure it's a valid JSON.
+Input: {{$input}}
+{{$waf}}
+""";
+```
+
+#### Explain
+
+**Purpose:** Code explanation prompt for the Dev Lead role, similar to the Developer's explain but from a leadership perspective.
+
+**Usage:** Called when the Dev Lead needs to understand code.
+
+**Variables:**
+- `{{$input}}`: Code to explain
+
+```csharp
+Explain = """
+You are a Dev Lead.
+Please explain the code that is in the input below. You can include references or documentation links in your explanation.
+Also where appropriate please output a list of keywords to describe the code or its capabilities.
+example:
+Keywords: Azure, networking, security, authentication
+
+If the code's purpose is not clear output an error:
+Error: The model could not determine the purpose of the code.
+
+--
+Input: {{$input}}
+""";
+```
+
+### Product Manager Agent
+
+**Location:** `dotnet/samples/dev-team/DevTeam.Backend/Agents/ProductManager/PMPrompts.cs`
+
+#### BootstrapProject
+
+**Purpose:** Generates bash scripts to bootstrap/scaffold new applications. Creates the initial project structure without running the applications.
+
+**Usage:** Called at project start to generate the initial application structure.
+
+**Variables:**
+- `{{$input}}`: Application description
+- `{{$waf}}`: Well-Architected Framework considerations
+
+```csharp
+BootstrapProject = """
+Please write a bash script with the commands that would be required to generate applications as described in the following input.
+You may add comments to the script and the generated output but do not add any other text except the bash script.
+You may include commands to build the applications but do not run them.
+Do not include any git commands.
+Input: {{$input}}
+{{$waf}}
+""";
+```
+
+#### Readme
+
+**Purpose:** Generates README.md documentation for the application, focusing on features, architecture, and usage instructions.
+
+**Usage:** Called to create or update project documentation.
+
+**Variables:**
+- `{{$input}}`: Application information
+- `{{$waf}}`: Well-Architected Framework considerations
+
+```csharp
+Readme = """
+You are a program manager on a software development team. You are working on an app described below.
+Based on the input below, and any dialog or other context, please output a raw README.MD markdown file documenting the main features of the app and the architecture or code organization.
+Do not describe how to create the application.
+Write the README as if it were documenting the features and architecture of the application. You may include instructions for how to run the application.
+Input: {{$input}}
+{{$waf}}
+""";
+```
+
+#### Explain
+
+**Purpose:** Code explanation prompt from the Product Manager perspective.
+
+**Usage:** Called when the PM needs to understand code.
+
+**Variables:**
+- `{{$input}}`: Code to explain
+
+```csharp
+Explain = """
+You are a Product Manager.
+Please explain the code that is in the input below. You can include references or documentation links in your explanation.
+Also where appropriate please output a list of keywords to describe the code or its capabilities.
+example:
+Keywords: Azure, networking, security, authentication
+
+If the code's purpose is not clear output an error:
+Error: The model could not determine the purpose of the code.
+
+--
+Input: {{$input}}
+""";
+```
+
