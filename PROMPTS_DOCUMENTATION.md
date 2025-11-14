@@ -1009,3 +1009,86 @@ Input: {{$input}}
 """;
 ```
 
+---
+
+## Tool-Specific Prompts
+
+### GraphRAG Tools
+
+**Location:** `python/packages/autogen-ext/src/autogen_ext/tools/graphrag/`
+
+#### Global Search System Message
+
+**Purpose:** System message for the GraphRAG tool selector that determines whether to use global or local search based on query characteristics.
+
+**Usage:** Used when deciding between global (comprehensive dataset understanding) and local (specific entity/relationship queries) search modes.
+
+**Location:** `_global_search.py` and `_local_search.py`
+
+```python
+system_message = """You are a tool selector AI assistant using the GraphRAG framework. Your primary task is to determine the appropriate search tool to call based on the user's query. For broader, abstract questions requiring a comprehensive understanding of the dataset, call the 'global_search' function. For specific, detailed information about particular entities or relationships, call the 'local_search' function."""
+```
+
+---
+
+## Selection and Routing Prompts
+
+### Selector Group Chat
+
+**Location:** `python/packages/autogen-agentchat/src/autogen_agentchat/teams/_group_chat/_selector_group_chat.py`
+
+#### Default Selector Prompt
+
+**Purpose:** Role-play based speaker selection prompt. The AI plays a game where it selects the next participant to speak based on the conversation history and available roles. This creates a natural, context-aware turn-taking mechanism.
+
+**Usage:** Default prompt for SelectorGroupChat when no custom selector prompt is provided.
+
+**Variables:**
+- `{roles}`: Description of all available roles
+- `{participants}`: List of participant names to choose from
+- `{history}`: Conversation history
+
+**Output:** Single role name selected from the participants list
+
+```python
+selector_prompt = """You are in a role play game. The following roles are available:
+{roles}.
+Read the following conversation. Then select the next role from {participants} to play. Only return the role.
+
+{history}
+
+Read the above conversation. Then select the next role from {participants} to play. Only return the role.
+"""
+```
+
+**Key Design Features:**
+- Simple, clear task definition
+- Role-play framing makes selection more natural
+- Repeats the instruction to emphasize only returning the role name
+- No complex reasoning required, just pattern matching on conversation flow
+- Relies on the model's understanding of turn-taking in conversations
+
+---
+
+## Summary
+
+This documentation covers all major prompt categories in the AutoGen framework:
+
+1. **Orchestration Prompts** - MagenticOne's sophisticated multi-stage orchestration including fact gathering, planning, progress tracking, and adaptive replanning
+2. **Web Surfing Prompts** - Multimodal and text-based web interaction with visual bounding boxes and structured navigation
+3. **Coding Assistant Prompts** - Step-by-step code generation, execution, debugging, and verification
+4. **Memory and Learning Prompts** - Task-centric memory system with failure analysis, insight extraction, and knowledge retrieval
+5. **Agent Role Prompts** - Specialized system messages for different agent types (assistant, file surfer, video surfer, society of mind)
+6. **Development Team Prompts** - Role-specific prompts for software development teams (developer, dev lead, product manager)
+7. **Tool-Specific Prompts** - GraphRAG search tool selection
+8. **Selection and Routing Prompts** - Role-play based speaker selection for group chats
+
+These prompts demonstrate various advanced prompting techniques:
+- Multi-stage prompting (orchestrator)
+- Chain-of-thought reasoning (progress ledger)
+- Structured output with JSON schemas (planning)
+- Meta-prompting (dev lead generating prompts)
+- Role-play framing (selector)
+- Teacher-student framework (memory learning)
+- Context-aware routing (tool selection)
+
